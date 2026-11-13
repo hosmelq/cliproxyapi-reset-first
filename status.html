@@ -1,0 +1,1321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset First</title>
+<style>
+:root {
+  --bg-secondary: #faf9f5;
+  --bg-primary: #f0eee8;
+  --bg-tertiary: #e9e6df;
+  --text-primary: #2d2a26;
+  --text-secondary: #6d6760;
+  --text-tertiary: #a29c95;
+  --text-quaternary: #c0bab3;
+  --border-color: #e3e1db;
+  --border-hover: #cecac4;
+  --primary-color: #8b8680;
+  --primary-active: #726d67;
+  --warning-text: #c65746;
+  --warning-border: #c6574659;
+  --bg-error-light: #c657461a;
+  --failure-badge-bg: #c6574624;
+  --failure-badge-text: #8a3a30;
+  --failure-badge-border: #c6574659;
+  --quota-medium-color: #e0aa14;
+  --viz-success: #10b981;
+  --viz-failure: #c65746;
+  --claude-bg: #fbece4;
+  --claude-text: #c05621;
+  --codex-bg: #eae7ff;
+  --codex-text: #3538d4;
+  --well: var(--bg-secondary);
+  --ease-out-strong: cubic-bezier(.23, 1, .32, 1);
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+
+[data-theme="white"] {
+  --bg-secondary: #fff;
+  --bg-primary: #fff;
+  --bg-tertiary: #f6f6f6;
+  --border-color: #e5e5e5;
+  --border-hover: #ccc;
+  --bg-error-light: #c6574614;
+  --well: var(--bg-tertiary);
+}
+
+[data-theme="dark"] {
+  --bg-secondary: #151412;
+  --bg-primary: #1d1b18;
+  --bg-tertiary: #262320;
+  --text-primary: #f6f4f1;
+  --text-secondary: #c9c3bb;
+  --text-tertiary: #9c958d;
+  --text-quaternary: #6f6962;
+  --border-color: #3a3530;
+  --border-hover: #5a544d;
+  --primary-active: #a6a099;
+  --warning-text: #f1b0a6;
+  --warning-border: #c6574673;
+  --bg-error-light: #c657462e;
+  --failure-badge-bg: #c657463d;
+  --failure-badge-text: #f1b0a6;
+  --failure-badge-border: #c6574680;
+  --quota-medium-color: #ffd862;
+  --viz-success: #0fae78;
+  --viz-failure: #cf4b3a;
+  --claude-bg: #5e2c14;
+  --claude-text: #e8a882;
+  --codex-bg: #262395;
+  --codex-text: #b5b0ff;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px clamp(16px, 3vw, 32px) 48px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.concealed {
+  visibility: hidden;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px 24px;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+h1 {
+  font-size: clamp(26px, 3.2vw, 30px);
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta::before {
+  content: "▍";
+  content: "▍" / "";
+  align-self: center;
+  margin-right: 1px;
+  color: var(--text-quaternary);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.meta[data-state="ok"]::before,
+.meta[data-state="ok"] .state {
+  color: var(--viz-success);
+}
+
+.meta[data-state="attention"]::before {
+  color: var(--quota-medium-color);
+}
+
+.meta[data-state="error"]::before,
+.meta[data-state="error"] .state {
+  color: var(--viz-failure);
+}
+
+.details {
+  display: contents;
+}
+
+.sep {
+  color: var(--text-quaternary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.action {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--text-primary);
+  color: var(--bg-secondary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform .16s var(--ease-out-strong), background-color .2s var(--ease-out-strong), box-shadow .2s var(--ease-out-strong);
+}
+
+.action svg {
+  flex-shrink: 0;
+}
+
+.action:active {
+  transform: scale(.97);
+}
+
+.action[aria-busy="true"] {
+  cursor: progress;
+}
+
+.action[aria-busy="true"] svg {
+  animation: spin .8s linear infinite;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .action:hover {
+    background: color-mix(in srgb, var(--text-primary) 86%, var(--bg-secondary));
+    box-shadow: 0 12px 26px color-mix(in srgb, var(--text-primary) 22%, transparent);
+    transform: translateY(-1px);
+  }
+}
+
+.lede {
+  max-width: 78ch;
+  margin-top: -10px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  text-wrap: pretty;
+}
+
+#pools {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+#pools:empty {
+  display: none;
+}
+
+.section,
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(16px, 2.4vw, 24px);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+}
+
+.section {
+  gap: 18px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.provider {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.provider.claude {
+  background: var(--claude-bg);
+  color: var(--claude-text);
+}
+
+.provider.codex {
+  background: var(--codex-bg);
+  color: var(--codex-text);
+}
+
+.pool-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.pool-meta strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.eyebrow {
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--well);
+}
+
+.hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.hero-name {
+  min-width: 0;
+  margin-right: auto;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hero-line,
+.row-line {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.hero-meters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 32px;
+  margin-top: 4px;
+}
+
+.big {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.big-label {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.big-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.big-percent {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.big-unit {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.big .bar {
+  height: 8px;
+}
+
+.big-reset {
+  color: var(--text-quaternary);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.number {
+  padding-top: 1px;
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.row-name {
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row.idle .row-name {
+  color: var(--text-secondary);
+}
+
+.row.idle .fill {
+  opacity: .55;
+}
+
+.when {
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.row-meters {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--text-quaternary) 24%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--text-quaternary) 10%, transparent);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.pill.failure {
+  border-color: var(--failure-badge-border);
+  background: var(--failure-badge-bg);
+  color: var(--failure-badge-text);
+}
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.meter-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meter-value {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.percent {
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+.unit {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.reset {
+  color: var(--text-quaternary);
+}
+
+.reset::before,
+.relative::before {
+  content: "·";
+  content: "·" / "";
+  margin: 0 4px;
+  color: var(--text-quaternary);
+}
+
+.relative {
+  color: var(--text-tertiary);
+}
+
+.big-reset .relative::before {
+  margin: 0 3px;
+}
+
+.bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.fill {
+  height: 100%;
+  border-radius: 9999px;
+  transform-origin: 0;
+}
+
+.intro .fill {
+  animation: fill .48s var(--ease-out-strong) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.fill.high {
+  background: var(--viz-success);
+}
+
+.fill.medium {
+  background: var(--quota-medium-color);
+}
+
+.fill.low {
+  background: var(--viz-failure);
+}
+
+.empty {
+  padding: 24px;
+  border: 1px dashed var(--border-color);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.alert {
+  padding: 9px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: 10px;
+  background: var(--bg-error-light);
+  color: var(--warning-text);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.panel {
+  gap: 14px;
+  color: var(--text-secondary);
+}
+
+.panel h2 {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.panel p {
+  margin-top: 4px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.input {
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 420px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.input:focus-visible {
+  border-color: var(--border-hover);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--warning-border);
+}
+
+.field-error {
+  color: var(--warning-text);
+  font-size: 13px;
+}
+
+.footnote {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action {
+    align-self: flex-start;
+  }
+
+  .meter-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .row-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .input {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .pool-meta {
+    flex-direction: column;
+  }
+
+  .pool-meta .sep {
+    display: none;
+  }
+
+  .hero-meters,
+  .row-meters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .tags,
+  .row-meters {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action {
+    transition: none;
+  }
+
+  .action[aria-busy="true"] svg,
+  .intro .fill {
+    animation: none;
+  }
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="header">
+    <div class="title">
+      <h1>Reset First</h1>
+      <p class="meta" id="meta" data-state="loading"><span class="state" id="state">Loading</span><span class="details" id="details" hidden><span class="sep" aria-hidden="true">·</span><span id="version"></span><span class="sep" aria-hidden="true">·</span><span id="count"></span><span class="sep" aria-hidden="true">·</span><span>updated <span id="updated"></span></span></span></p>
+    </div>
+    <button class="action" id="refresh" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>Refresh</button>
+  </header>
+
+  <p class="lede">Each request goes to the subscription whose weekly quota resets soonest, so quota that would expire unused gets used first. Accounts with an unknown reset go first once, to learn it. API keys are used only when no subscription is available. An account that hits its 5-hour or weekly limit waits at the end until that limit resets.</p>
+
+  <form class="panel" id="login" hidden>
+    <div>
+      <h2>Management key required</h2>
+      <p>Sign in to the dashboard with “Remember password” on, or enter the key here. It is kept only in this tab.</p>
+    </div>
+    <div class="field">
+      <label for="key">Management key</label>
+      <div class="inline">
+        <input class="input" id="key" name="cpa-management-key" type="password" autocomplete="current-password" spellcheck="false" required>
+        <button class="action" type="submit">Connect</button>
+      </div>
+      <p class="field-error" id="login-error" role="alert" hidden></p>
+    </div>
+  </form>
+
+  <p class="alert" id="error" role="alert" hidden></p>
+
+  <div id="pools"></div>
+
+  <p class="footnote" id="usage-note" hidden>Usage updates with each response through CPA, so usage from other apps shows up after the account’s next request.</p>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const statusURL = "/v0/management/reset-first/status";
+  const keyStorage = "reset-first:management-key";
+  const refreshEvery = 30000;
+  const providerNames = { claude: "Claude", codex: "Codex" };
+
+  const dateFormat = new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "always" });
+  const clockFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+
+  const byId = (id) => document.getElementById(id);
+
+  let key = "";
+  let timer = 0;
+  let loading = false;
+  let clockOffset = 0;
+  let rendered = false;
+
+  function element(tag, className, text) {
+    const node = document.createElement(tag);
+
+    if (className) {
+      node.className = className;
+    }
+
+    if (text !== undefined) {
+      node.textContent = text;
+    }
+
+    return node;
+  }
+
+  function applyTheme(theme) {
+    if (theme === "dark" || theme === "white") {
+      document.documentElement.dataset.theme = theme;
+    } else {
+      delete document.documentElement.dataset.theme;
+    }
+  }
+
+  function syncTheme() {
+    try {
+      if (window.parent !== window) {
+        const root = window.parent.document.documentElement;
+        const copy = () => applyTheme(root.getAttribute("data-theme"));
+
+        copy();
+        new MutationObserver(copy).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+
+        return;
+      }
+    } catch {
+    }
+
+    let theme = "auto";
+
+    try {
+      theme = JSON.parse(localStorage.getItem("cli-proxy-theme") || "{}").state?.theme || "auto";
+    } catch {
+    }
+
+    if (theme === "auto") {
+      theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "white";
+    }
+
+    applyTheme(theme);
+  }
+
+  function dashboardKey() {
+    try {
+      const stored = localStorage.getItem("cli-proxy-auth") || "";
+      if (!stored.startsWith("enc::v2::")) {
+        return "";
+      }
+
+      const data = Uint8Array.from(atob(stored.slice(9)), (char) => char.charCodeAt(0));
+      const secret = new TextEncoder().encode("cli-proxy-api-webui::secure-storage|" + location.host);
+      const plain = new TextDecoder().decode(data.map((byte, index) => byte ^ secret[index % secret.length]));
+      const value = JSON.parse(plain).state?.managementKey;
+
+      return typeof value === "string" ? value : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function tabKey() {
+    try {
+      return sessionStorage.getItem(keyStorage) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function rememberKey(value) {
+    key = value;
+
+    try {
+      if (value) {
+        sessionStorage.setItem(keyStorage, value);
+      } else {
+        sessionStorage.removeItem(keyStorage);
+      }
+    } catch {
+    }
+  }
+
+  function relative(date) {
+    const remaining = date.getTime() - (Date.now() + clockOffset);
+
+    if (remaining <= 0) {
+      return "now";
+    }
+
+    if (remaining >= 86400000) {
+      return relativeFormat.format(Math.floor(remaining / 86400000), "day");
+    }
+
+    if (remaining >= 3600000) {
+      return relativeFormat.format(Math.floor(remaining / 3600000), "hour");
+    }
+
+    return relativeFormat.format(Math.max(1, Math.floor(remaining / 60000)), "minute");
+  }
+
+  function sameTime(left, right) {
+    return Math.abs(Date.parse(left) - Date.parse(right)) <= 600000;
+  }
+
+  function plural(count, noun) {
+    return count + " " + noun + (count === 1 ? "" : "s");
+  }
+
+  function setStatus(state, label) {
+    byId("meta").dataset.state = state;
+    byId("state").textContent = label;
+  }
+
+  function showMessage(id, message) {
+    const node = byId(id);
+
+    if (node.textContent === message && node.hidden === !message) {
+      return;
+    }
+
+    node.textContent = message;
+    node.hidden = !message;
+  }
+
+  function markKeyInvalid(invalid) {
+    const input = byId("key");
+
+    if (invalid) {
+      input.setAttribute("aria-invalid", "true");
+      input.setAttribute("aria-describedby", "login-error");
+    } else {
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+    }
+  }
+
+  function showLogin(message) {
+    clearTimeout(timer);
+    setStatus("attention", "Key needed");
+    byId("pools").replaceChildren();
+    byId("usage-note").hidden = true;
+    byId("details").hidden = true;
+    byId("refresh").classList.add("concealed");
+    byId("login").hidden = false;
+    showMessage("login-error", message);
+    showMessage("error", "");
+    markKeyInvalid(Boolean(message));
+
+    if (message) {
+      byId("key").focus();
+    }
+  }
+
+  function windowLabel(minutes) {
+    if (minutes === 10080) {
+      return "Weekly limit";
+    }
+
+    if (minutes % 1440 === 0) {
+      return minutes / 1440 + "-day limit";
+    }
+
+    return minutes % 60 === 0 ? minutes / 60 + "-hour limit" : minutes + "-minute limit";
+  }
+
+  function percentLeft(usage) {
+    return Math.max(0, Math.min(100, 100 - usage.used_percent));
+  }
+
+  function bar(left, index) {
+    const track = element("div", "bar");
+    const fill = element("div", "fill " + (left >= 70 ? "high" : left >= 30 ? "medium" : "low"));
+
+    fill.style.width = left + "%";
+    fill.style.setProperty("--i", String(index));
+    track.setAttribute("aria-hidden", "true");
+    track.append(fill);
+
+    return track;
+  }
+
+  function meter(usage, index) {
+    const left = percentLeft(usage);
+    const node = element("div", "meter");
+    const head = element("div", "meter-head");
+    const value = element("span", "meter-value");
+    const percent = element("span", "percent", Math.round(left) + "%");
+
+    percent.append(element("span", "unit", " left"));
+    value.append(percent);
+
+    if (usage.resets_at) {
+      const resetsAt = new Date(usage.resets_at);
+      value.append(element("span", "reset", dateFormat.format(resetsAt)), element("span", "relative", relative(resetsAt)));
+    }
+
+    head.append(element("span", "meter-label", windowLabel(usage.minutes)), value);
+    node.append(head, bar(left, index));
+
+    return node;
+  }
+
+  function bigMeter(usage, index) {
+    const left = percentLeft(usage);
+    const node = element("div", "big");
+    const value = element("span", "big-value");
+
+    value.append(element("span", "big-percent", Math.round(left) + "%"), element("span", "big-unit", "left"));
+    node.append(element("span", "big-label", windowLabel(usage.minutes)), value, bar(left, index));
+
+    if (usage.resets_at) {
+      const resetsAt = new Date(usage.resets_at);
+      const reset = element("span", "big-reset", dateFormat.format(resetsAt));
+
+      reset.append(element("span", "relative", relative(resetsAt)));
+      node.append(reset);
+    }
+
+    return node;
+  }
+
+  function limitName(account) {
+    const limits = (account.windows || []).filter((usage) => usage.limited);
+    const match = limits.find((usage) => sameTime(usage.resets_at, account.limited_until)) || limits[0];
+
+    return match ? windowLabel(match.minutes) : "Limit";
+  }
+
+  function skippedReason(account, pool) {
+    const offered = pool.accounts.filter((other) => other.available).map((other) => other.priority || 0);
+
+    if (offered.length && (account.priority || 0) < Math.max(...offered)) {
+      return "Lower priority tier than the accounts in use. No return time known.";
+    }
+
+    return "CPA left it out of the last request, for example during a cooldown. No return time known.";
+  }
+
+  function explain(account, pool, first) {
+    if (account.state === "limited") {
+      const until = new Date(account.limited_until);
+
+      return { tag: limitName(account) + " used up", alert: true, text: first ? "Every account CPA offers is at a limit. Back" : "Back", when: dateFormat.format(until) + " · " + relative(until) };
+    }
+
+    if (!account.available) {
+      return { tag: "Skipped by CPA", text: skippedReason(account, pool) };
+    }
+
+    if (account.state === "learning") {
+      return { tag: "Reset unknown", text: "Goes first so its next response shows when its weekly quota resets." };
+    }
+
+    if (account.state === "waiting") {
+      const retry = account.retry_at ? relative(new Date(account.retry_at)) : "soon";
+      const text = first ? "Its last response did not report a reset. Checks again " + retry + "." : "Still usable. Goes after accounts with a known reset. Checks again " + retry + ".";
+
+      return { tag: "Reset not reported", text };
+    }
+
+    if (account.state === "api_key") {
+      return { tag: "API key", text: "Fallback: used only when no subscription is available." };
+    }
+
+    if (!account.resets_at) {
+      return { text: "" };
+    }
+
+    const resets = relative(new Date(account.resets_at));
+
+    return { text: first ? "Its weekly quota resets soonest, " + resets + "." : "Weekly quota resets " + resets + "." };
+  }
+
+  function reasonLine(className, reason) {
+    const node = element(className === "hero-line" ? "p" : "span", className, reason.text);
+
+    if (reason.when) {
+      node.append(" ", element("span", "when", reason.when));
+    }
+
+    return node;
+  }
+
+  function tag(reason) {
+    return element("span", reason.alert ? "pill failure" : "pill", reason.tag);
+  }
+
+  function hero(account, pool) {
+    const reason = explain(account, pool, true);
+    const node = element("article", "hero");
+    const top = element("div", "hero-top");
+    const usage = account.windows || [];
+
+    top.append(element("span", "hero-name", account.id));
+
+    if (reason.tag) {
+      top.append(tag(reason));
+    }
+
+    node.append(top);
+
+    if (reason.text) {
+      node.append(reasonLine("hero-line", reason));
+    }
+
+    if (usage.length) {
+      const meters = element("div", "hero-meters");
+      meters.append(...usage.map(bigMeter));
+      node.append(meters);
+    }
+
+    return node;
+  }
+
+  function row(account, position, pool) {
+    const reason = explain(account, pool, false);
+    const node = element("li", position ? "row" : "row idle");
+    const main = element("div", "row-main");
+    const name = element("span", "row-name", account.id);
+    const tags = element("div", "tags");
+    const usage = account.windows || [];
+
+    name.title = account.id;
+    main.append(name);
+
+    if (reason.text) {
+      main.append(reasonLine("row-line", reason));
+    }
+
+    if (reason.tag) {
+      tags.append(tag(reason));
+    }
+
+    node.append(element("span", "number", position ? String(position) : ""), main, tags);
+
+    if (usage.length) {
+      const meters = element("div", "row-meters");
+      meters.append(...usage.map(meter));
+      node.append(meters);
+    }
+
+    return node;
+  }
+
+  function separator() {
+    const node = element("span", "sep", "·");
+    node.setAttribute("aria-hidden", "true");
+
+    return node;
+  }
+
+  function group(heading, ...children) {
+    const node = element("div", "group");
+
+    node.append(typeof heading === "string" ? element("h3", "eyebrow", heading) : heading, ...children);
+
+    return node;
+  }
+
+  function pool(report) {
+    const offered = report.accounts.filter((account) => account.available);
+    const queue = offered.filter((account) => account.state !== "limited");
+    const first = queue[0] || offered[0];
+    const rest = queue.slice(1);
+    const idle = report.accounts.filter((account) => account !== first && (!account.available || account.state === "limited"));
+    const node = element("section", "section");
+    const head = element("div", "head");
+    const meta = element("span", "pool-meta");
+
+    meta.append(element("span", "", plural(report.accounts.length, "account")));
+
+    if (report.serving && report.serving !== first?.id) {
+      const last = element("span");
+      last.append(separator(), " Last request went to ", element("strong", "", report.serving));
+      meta.append(last);
+    }
+
+    head.append(element("h2", "provider " + report.provider, providerNames[report.provider] || report.provider), meta);
+    node.append(head, group("Requests go to", first ? hero(first, report) : element("p", "hero-line", "No account is available right now.")));
+
+    if (rest.length) {
+      const list = element("ol", "list");
+      list.start = 2;
+      list.append(...rest.map((account, index) => row(account, index + 2, report)));
+      node.append(group("Then, in this order", list));
+    }
+
+    if (idle.length) {
+      const list = element("ul", "list");
+      list.append(...idle.map((account) => row(account, 0, report)));
+      const heading = element("h3", "eyebrow", "Not used right now ");
+      heading.append(separator(), " " + idle.length);
+      node.append(group(heading, list));
+    }
+
+    return node;
+  }
+
+  function render(report) {
+    const now = Date.parse(report.now);
+    clockOffset = Number.isNaN(now) ? 0 : now - Date.now();
+
+    const providers = report.providers || [];
+    const sections = providers.map(pool);
+    const accounts = providers.reduce((total, provider) => total + provider.accounts.length, 0);
+
+    if (!sections.length) {
+      sections.push(element("p", "empty", "No subscription has been routed yet. Claude and Codex accounts appear here after their first request through CPA."));
+    }
+
+    if (!rendered) {
+      rendered = true;
+      document.documentElement.classList.add("intro");
+      setTimeout(() => document.documentElement.classList.remove("intro"), 1200);
+    }
+
+    byId("pools").replaceChildren(...sections);
+    byId("usage-note").hidden = !providers.some((provider) => provider.accounts.some((account) => account.windows?.length));
+    byId("refresh").classList.remove("concealed");
+    byId("details").hidden = false;
+    byId("version").textContent = report.version ? "v" + report.version : "–";
+    byId("count").textContent = plural(accounts, "account");
+    byId("updated").textContent = clockFormat.format(new Date());
+    setStatus("ok", "Running");
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+
+    if (key && !document.hidden) {
+      timer = setTimeout(load, refreshEvery);
+    }
+  }
+
+  async function load() {
+    if (loading) {
+      return;
+    }
+
+    clearTimeout(timer);
+
+    if (!key) {
+      key = tabKey() || dashboardKey();
+    }
+
+    if (!key) {
+      showLogin("");
+      return;
+    }
+
+    const button = byId("refresh");
+    loading = true;
+    button.setAttribute("aria-busy", "true");
+
+    try {
+      const response = await fetch(statusURL, { headers: { Authorization: "Bearer " + key }, cache: "no-store" });
+
+      if (response.status === 401 || response.status === 403) {
+        rememberKey("");
+        showLogin("The management key was rejected.");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("CPA answered the status request with HTTP " + response.status + ".");
+      }
+
+      render(await response.json());
+      byId("login").hidden = true;
+      markKeyInvalid(false);
+      showMessage("error", "");
+    } catch (error) {
+      setStatus("error", "Unreachable");
+      showMessage("error", error instanceof TypeError ? "Could not reach CPA. Check the connection and try again." : error.message);
+    } finally {
+      loading = false;
+      button.removeAttribute("aria-busy");
+      schedule();
+    }
+  }
+
+  byId("refresh").addEventListener("click", load);
+
+  byId("login").addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const value = byId("key").value.trim();
+    if (!value) {
+      return;
+    }
+
+    byId("key").value = "";
+    rememberKey(value);
+    load();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      clearTimeout(timer);
+    } else if (key) {
+      load();
+    }
+  });
+
+  syncTheme();
+  load();
+})();
+</script>
+</body>
+</html>

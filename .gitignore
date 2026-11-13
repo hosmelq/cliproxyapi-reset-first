@@ -1,0 +1,7 @@
+*.so
+*.dylib
+*.dll
+*.h
+*.test
+/cliproxyapi-reset-first
+/dist/

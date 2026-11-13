@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-24.04
+            library: reset-first.so
+            image: quay.io/pypa/manylinux2014_x86_64
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+            library: reset-first.so
+            image: quay.io/pypa/manylinux2014_aarch64
+          - goos: darwin
+            goarch: amd64
+            runner: macos-15-intel
+            library: reset-first.dylib
+          - goos: darwin
+            goarch: arm64
+            runner: macos-15
+            library: reset-first.dylib
+          - goos: windows
+            goarch: amd64
+            runner: windows-2025
+            library: reset-first.dll
+            msystem: UCRT64
+            compiler: mingw-w64-ucrt-x86_64-gcc
+            cc: gcc
+          - goos: windows
+            goarch: arm64
+            runner: windows-11-arm
+            library: reset-first.dll
+            msystem: CLANGARM64
+            compiler: mingw-w64-clang-aarch64-gcc-compat
+            cc: aarch64-w64-mingw32-gcc
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build against glibc 2.17
+        if: runner.os == 'Linux'
+        run: >-
+          docker run --rm -v "$PWD:/src" -v "$(go env GOROOT):/go:ro" -w /src -e CGO_ENABLED=1 ${{ matrix.image }}
+          /go/bin/go build -buildmode=c-shared -buildvcs=false -o dist/${{ matrix.library }} .
+      - name: Build for macOS 12 and later
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: '1'
+          MACOSX_DEPLOYMENT_TARGET: '12.0'
+        run: go build -buildmode=c-shared -o dist/${{ matrix.library }} .
+      - name: Install a MinGW compiler
+        if: runner.os == 'Windows'
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          install: ${{ matrix.compiler }}
+      - name: Build with MinGW
+        if: runner.os == 'Windows'
+        env:
+          CC: ${{ matrix.cc }}
+          CGO_ENABLED: '1'
+        run: |
+          msystem='${{ matrix.msystem }}'
+          PATH="$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')/${msystem,,}/bin:$PATH"
+          go build -buildmode=c-shared -o dist/${{ matrix.library }} .
+      - name: Load the library
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} .github/scripts/load-plugin.py dist/${{ matrix.library }} "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/${{ matrix.library }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: build
+      - name: Package
+        run: |
+          mkdir dist
+          for platform in build/*; do
+            chmod 755 "$platform"/*
+            zip -j "dist/reset-first_${GITHUB_REF_NAME#v}_${platform#build/}.zip" "$platform"/*
+          done
+          cd dist
+          sha256sum *.zip > checksums.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/checksums.txt --verify-tag --title "$GITHUB_REF_NAME" --notes ""
