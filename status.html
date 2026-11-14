@@ -77,6 +77,11 @@
   box-sizing: border-box;
 }
 
+/* CPA shows this page in an iframe, so stop its scrolling from moving CPA's page as well. */
+html {
+  overscroll-behavior-y: contain;
+}
+
 body {
   margin: 0;
   background: var(--bg-secondary);
@@ -754,7 +759,7 @@ h1 {
     <button class="action" id="refresh" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>Refresh</button>
   </header>
 
-  <p class="lede">Each request goes to the subscription whose weekly quota resets soonest, so quota that would expire unused gets used first. Accounts with an unknown reset go first once, to learn it. API keys are used only when no subscription is available. An account that hits its 5-hour or weekly limit waits at the end until that limit resets. The weekly Fable 5 limit applies only to Fable requests and does not change the order.</p>
+  <p class="lede">Requests go to the subscription whose weekly quota resets soonest, so less of it expires unused.</p>
 
   <form class="panel" id="login" hidden>
     <div>
