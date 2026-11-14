@@ -362,57 +362,6 @@ h1 {
   font-size: 12.5px;
 }
 
-.hero-meters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 16px 32px;
-  margin-top: 4px;
-}
-
-.big {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
-
-.big-label {
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.big-value {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.big-percent {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -.02em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.big-unit {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.big .bar {
-  height: 8px;
-}
-
-.big-reset {
-  color: var(--text-quaternary);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-}
-
 .list {
   margin: 0;
   padding: 0;
@@ -475,11 +424,15 @@ h1 {
   gap: 4px;
 }
 
-.row-meters {
-  display: grid;
+.meters {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.row .meters {
   grid-column: 2 / -1;
-  grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
-  gap: 14px 24px;
 }
 
 .pill {
@@ -511,9 +464,9 @@ h1 {
 
 .meter-head {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -550,20 +503,15 @@ h1 {
   color: var(--text-quaternary);
 }
 
-.reset::before,
+.relative {
+  color: var(--text-tertiary);
+}
+
 .relative::before {
   content: "·";
   content: "·" / "";
   margin: 0 4px;
   color: var(--text-quaternary);
-}
-
-.relative {
-  color: var(--text-tertiary);
-}
-
-.big-reset .relative::before {
-  margin: 0 3px;
 }
 
 .bar {
@@ -708,6 +656,12 @@ h1 {
     overflow-wrap: anywhere;
   }
 
+  .meter-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
   .input {
     font-size: 16px;
   }
@@ -722,16 +676,11 @@ h1 {
     display: none;
   }
 
-  .hero-meters {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .row {
     grid-template-columns: 24px minmax(0, 1fr);
   }
 
-  .tags,
-  .row-meters {
+  .tags {
     grid-column: 2;
     justify-content: flex-start;
   }
@@ -1010,7 +959,10 @@ h1 {
 
     if (usage.resets_at) {
       const resetsAt = new Date(usage.resets_at);
-      value.append(element("span", "reset", dateFormat.format(resetsAt)), element("span", "relative", relative(resetsAt)));
+      const reset = element("span", "reset", dateFormat.format(resetsAt));
+
+      reset.append(element("span", "relative", relative(resetsAt)));
+      value.append(reset);
     }
 
     head.append(element("span", "meter-label", windowLabel(usage)), value);
@@ -1019,21 +971,10 @@ h1 {
     return node;
   }
 
-  function bigMeter(usage, index) {
-    const left = percentLeft(usage);
-    const node = element("div", "big");
-    const value = element("span", "big-value");
+  function meters(usage) {
+    const node = element("div", "meters");
 
-    value.append(element("span", "big-percent", Math.round(left) + "%"), element("span", "big-unit", "left"));
-    node.append(element("span", "big-label", windowLabel(usage)), value, bar(left, index));
-
-    if (usage.resets_at) {
-      const resetsAt = new Date(usage.resets_at);
-      const reset = element("span", "big-reset", dateFormat.format(resetsAt));
-
-      reset.append(element("span", "relative", relative(resetsAt)));
-      node.append(reset);
-    }
+    node.append(...usage.map(meter));
 
     return node;
   }
@@ -1123,9 +1064,7 @@ h1 {
     }
 
     if (usage.length) {
-      const meters = element("div", "hero-meters");
-      meters.append(...usage.map(bigMeter));
-      node.append(meters);
+      node.append(meters(usage));
     }
 
     return node;
@@ -1153,9 +1092,7 @@ h1 {
     node.append(element("span", "number", position ? String(position) : ""), main, tags);
 
     if (usage.length) {
-      const meters = element("div", "row-meters");
-      meters.append(...usage.map(meter));
-      node.append(meters);
+      node.append(meters(usage));
     }
 
     return node;
