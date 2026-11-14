@@ -318,6 +318,47 @@ func TestFullUtilizationCountsAsUsedUp(t *testing.T) {
 	wantPick(t, r, req, "a")
 }
 
+func TestFableLimitIsReportedWithoutMovingTheAccount(t *testing.T) {
+	r, now := testRouter()
+
+	weeklyReset := now.Add(24 * time.Hour)
+	observeReset(r, "b", now.Add(6*24*time.Hour))
+	observeClaude(r, "a", http.Header{
+		"Anthropic-Ratelimit-Unified-Status":            {"rejected"},
+		"Anthropic-Ratelimit-Unified-7d-Status":         {"allowed"},
+		"Anthropic-Ratelimit-Unified-7d-Utilization":    {"0.62"},
+		"Anthropic-Ratelimit-Unified-7d-Reset":          {unix(weeklyReset)},
+		"Anthropic-Ratelimit-Unified-7d_oi-Status":      {"rejected"},
+		"Anthropic-Ratelimit-Unified-7d_oi-Utilization": {"1.0"},
+		"Anthropic-Ratelimit-Unified-7d_oi-Reset":       {unix(weeklyReset)},
+	})
+
+	wantPick(t, r, pickRequest("a", "b"), "a")
+
+	observeClaude(r, "a", http.Header{
+		"Anthropic-Ratelimit-Unified-7d-Utilization": {"0.63"},
+		"Anthropic-Ratelimit-Unified-7d-Reset":       {unix(weeklyReset)},
+	})
+
+	account := r.Status().Providers[0].Accounts[0]
+	if account.ID != "a" || account.State != "known" || len(account.Windows) != 2 {
+		t.Fatalf("account = %+v", account)
+	}
+
+	weekly, fable := account.Windows[0], account.Windows[1]
+	if weekly.Model != "" || weekly.UsedPercent != 63 || weekly.Limited {
+		t.Fatalf("weekly window = %+v", weekly)
+	}
+
+	if fable.Model != "fable" || fable.Minutes != 10080 || fable.UsedPercent != 100 || !fable.Limited || fable.ResetsAt == nil || !fable.ResetsAt.Equal(weeklyReset) {
+		t.Fatalf("Fable window = %+v", fable)
+	}
+
+	if raw, err := json.Marshal(fable); err != nil || !strings.Contains(string(raw), `"model":"fable"`) {
+		t.Fatalf("Fable window JSON = %s, err = %v", raw, err)
+	}
+}
+
 func TestPartialUsageKeepsAnActiveLimit(t *testing.T) {
 	r, now := testRouter()
 

@@ -16,7 +16,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 const (
 	pluginID       = "reset-first"
@@ -39,10 +39,12 @@ var quotaReaders = map[string]func(headers map[string][]string, requestedAt, now
 
 var claudeWindows = []struct {
 	name    string
+	model   string
 	minutes int64
 }{
-	{"5h", 5 * 60},
-	{"7d", 7 * 24 * 60},
+	{"5h", "", 5 * 60},
+	{"7d", "", 7 * 24 * 60},
+	{"7d_oi", "fable", 7 * 24 * 60},
 }
 
 var resetLogger = log.New(os.Stderr, pluginID+": ", 0)
@@ -54,6 +56,7 @@ type quota struct {
 
 type window struct {
 	minutes int64
+	model   string
 	used    float64
 	reset   int64
 	limited bool
@@ -107,6 +110,7 @@ type accountReport struct {
 
 type windowReport struct {
 	Minutes     int64      `json:"minutes"`
+	Model       string     `json:"model,omitempty"`
 	UsedPercent float64    `json:"used_percent"`
 	ResetsAt    *time.Time `json:"resets_at,omitempty"`
 	Limited     bool       `json:"limited,omitempty"`
@@ -299,8 +303,9 @@ func (a account) candidate(id string) pluginapi.SchedulerAuthCandidate {
 func (a account) limitedUntil(now time.Time) int64 {
 	until := int64(0)
 
+	// A model's own limit, such as Fable's weekly limit, only stops requests for that model.
 	for _, w := range a.windows {
-		if w.limited && w.reset > now.Unix() && w.reset > until {
+		if w.model == "" && w.limited && w.reset > now.Unix() && w.reset > until {
 			until = w.reset
 		}
 	}
@@ -318,7 +323,7 @@ func mergeWindows(stored []window, observed []observation, now time.Time) []wind
 	}
 
 	for _, next := range observed {
-		i := slices.IndexFunc(merged, func(w window) bool { return w.minutes == next.minutes })
+		i := slices.IndexFunc(merged, func(w window) bool { return w.minutes == next.minutes && w.model == next.model })
 		if i < 0 {
 			merged = append(merged, next.window)
 			continue
@@ -327,7 +332,9 @@ func mergeWindows(stored []window, observed []observation, now time.Time) []wind
 		merged[i] = merged[i].update(next)
 	}
 
-	slices.SortFunc(merged, func(a, b window) int { return cmp.Compare(a.minutes, b.minutes) })
+	slices.SortFunc(merged, func(a, b window) int {
+		return cmp.Or(cmp.Compare(a.minutes, b.minutes), cmp.Compare(a.model, b.model))
+	})
 
 	return merged
 }
@@ -356,7 +363,7 @@ func (a account) windowReports(now time.Time) []windowReport {
 	reports := make([]windowReport, 0, len(a.windows))
 
 	for _, w := range a.windows {
-		report := windowReport{Minutes: w.minutes, UsedPercent: w.used, Limited: w.limited}
+		report := windowReport{Minutes: w.minutes, Model: w.model, UsedPercent: w.used, Limited: w.limited}
 
 		switch {
 		case w.reset > now.Unix():
@@ -455,7 +462,9 @@ func claudeQuota(headers map[string][]string, _, _ time.Time) quota {
 		}
 
 		reset := headerTime(headers, prefix+"Reset")
-		observed.windows = append(observed.windows, observation{window: newWindow(claim.minutes, used, reset), earliest: reset})
+		next := newWindow(claim.minutes, used, reset)
+		next.model = claim.model
+		observed.windows = append(observed.windows, observation{window: next, earliest: reset})
 	}
 
 	return observed
