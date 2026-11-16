@@ -519,10 +519,219 @@ func TestCodexLateStreamKeepsALimit(t *testing.T) {
 	})
 
 	req := codexRequest("a", "b")
+	wantPick(t, r, req, "a")
 	wantPick(t, r, req, "b")
 
 	*now = requestedAt.Add(time.Hour)
 	wantPick(t, r, req, "a")
+}
+
+func TestUsedUpAccountIsCheckedAgainEveryFewMinutes(t *testing.T) {
+	r, now := testRouter()
+
+	observeReset(r, "b", now.Add(6*24*time.Hour))
+
+	rejected := pluginapi.UsageRecord{
+		Provider:    "claude",
+		AuthID:      "a",
+		RequestedAt: *now,
+		Failed:      true,
+		ResponseHeaders: http.Header{
+			"Anthropic-Ratelimit-Unified-5h-Status": {"rejected"},
+			"Anthropic-Ratelimit-Unified-5h-Reset":  {unix(now.Add(4 * time.Hour))},
+		},
+	}
+	r.Observe(rejected)
+
+	req := pickRequest("a", "b")
+	wantPick(t, r, req, "b")
+
+	*now = now.Add(limitRecheck - time.Second)
+	wantPick(t, r, req, "b")
+
+	*now = now.Add(time.Second)
+
+	for _, account := range r.Status().Providers[0].Accounts {
+		if account.ID == "a" && account.State != "limited" {
+			t.Fatalf("account due for a check = %+v", account)
+		}
+	}
+
+	wantPick(t, r, req, "a")
+	wantPick(t, r, req, "b")
+
+	rejected.RequestedAt = *now
+	r.Observe(rejected)
+
+	*now = now.Add(limitRecheck - time.Second)
+	wantPick(t, r, req, "b")
+
+	*now = now.Add(time.Second)
+	wantPick(t, r, req, "a")
+}
+
+func TestManualResetIsLearnedFromTheNextResponse(t *testing.T) {
+	output := captureLogs(t)
+	r, now := testRouter()
+
+	weeklyReset := now.Add(3 * 24 * time.Hour)
+	observeReset(r, "b", now.Add(6*24*time.Hour))
+
+	limitedAt := *now
+	r.Observe(pluginapi.UsageRecord{
+		Provider:    "claude",
+		AuthID:      "a",
+		RequestedAt: limitedAt.Add(-time.Second),
+		Failed:      true,
+		ResponseHeaders: http.Header{
+			"Anthropic-Ratelimit-Unified-7d-Status":         {"rejected"},
+			"Anthropic-Ratelimit-Unified-7d-Utilization":    {"1.0"},
+			"Anthropic-Ratelimit-Unified-7d-Reset":          {unix(weeklyReset)},
+			"Anthropic-Ratelimit-Unified-7d_oi-Utilization": {"0.65"},
+			"Anthropic-Ratelimit-Unified-7d_oi-Reset":       {unix(weeklyReset)},
+		},
+	})
+
+	req := pickRequest("a", "b")
+	wantPick(t, r, req, "b")
+
+	*now = now.Add(time.Minute)
+	r.Observe(pluginapi.UsageRecord{
+		Provider:    "claude",
+		AuthID:      "a",
+		RequestedAt: limitedAt.Add(-time.Minute),
+		ResponseHeaders: http.Header{
+			"Anthropic-Ratelimit-Unified-7d-Utilization": {"0.98"},
+			"Anthropic-Ratelimit-Unified-7d-Reset":       {unix(weeklyReset)},
+		},
+	})
+	wantPick(t, r, req, "b")
+
+	*now = limitedAt.Add(limitRecheck)
+	wantPick(t, r, req, "a")
+
+	r.Observe(pluginapi.UsageRecord{
+		Provider:    "claude",
+		AuthID:      "a",
+		RequestedAt: *now,
+		ResponseHeaders: http.Header{
+			"Anthropic-Ratelimit-Unified-7d-Utilization":    {"0"},
+			"Anthropic-Ratelimit-Unified-7d-Reset":          {unix(weeklyReset)},
+			"Anthropic-Ratelimit-Unified-7d_oi-Utilization": {"0"},
+			"Anthropic-Ratelimit-Unified-7d_oi-Reset":       {unix(weeklyReset)},
+		},
+	})
+	wantPick(t, r, req, "a")
+
+	*now = now.Add(time.Minute)
+	r.Observe(pluginapi.UsageRecord{
+		Provider:    "claude",
+		AuthID:      "a",
+		RequestedAt: limitedAt.Add(-2 * time.Minute),
+		ResponseHeaders: http.Header{
+			"Anthropic-Ratelimit-Unified-7d-Utilization":    {"1"},
+			"Anthropic-Ratelimit-Unified-7d-Reset":          {unix(weeklyReset)},
+			"Anthropic-Ratelimit-Unified-7d_oi-Utilization": {"0.7"},
+			"Anthropic-Ratelimit-Unified-7d_oi-Reset":       {unix(weeklyReset)},
+		},
+	})
+	wantPick(t, r, req, "a")
+
+	pool := r.Status().Providers[0]
+	wantAccounts(t, pool, "a:known", "b:known")
+
+	for _, usage := range pool.Accounts[0].Windows {
+		if usage.UsedPercent != 0 || usage.Limited || usage.ResetsAt == nil || !usage.ResetsAt.Equal(weeklyReset) {
+			t.Fatalf("window after the reset = %+v", usage)
+		}
+	}
+
+	if got := strings.Count(output.String(), `auth "a" is below its quota limits again`); got != 1 {
+		t.Fatalf("logs = %q, want one return", output.String())
+	}
+}
+
+func TestCodexCheckReplacesAResetEstimatedDuringALongStream(t *testing.T) {
+	r, now := testRouter()
+
+	streamedAt := *now
+	weeklyReset := streamedAt.Add(24 * time.Hour)
+
+	observeCodex(r, "b", http.Header{
+		"X-Codex-Secondary-Window-Minutes": {"10080"},
+		"X-Codex-Secondary-Reset-At":       {unix(weeklyReset.Add(15 * time.Minute))},
+	})
+
+	longStream := pluginapi.UsageRecord{
+		Provider:    "codex",
+		AuthID:      "a",
+		RequestedAt: streamedAt,
+		ResponseHeaders: http.Header{
+			"X-Codex-Secondary-Window-Minutes":      {"10080"},
+			"X-Codex-Secondary-Used-Percent":        {"100"},
+			"X-Codex-Secondary-Reset-After-Seconds": {"86400"},
+		},
+	}
+
+	*now = now.Add(20 * time.Minute)
+	r.Observe(longStream)
+
+	req := codexRequest("a", "b")
+	wantPick(t, r, req, "b")
+
+	*now = now.Add(limitRecheck)
+	wantPick(t, r, req, "a")
+
+	r.Observe(pluginapi.UsageRecord{
+		Provider:    "codex",
+		AuthID:      "a",
+		RequestedAt: *now,
+		ResponseHeaders: http.Header{
+			"X-Codex-Secondary-Window-Minutes": {"10080"},
+			"X-Codex-Secondary-Used-Percent":   {"0"},
+			"X-Codex-Secondary-Reset-At":       {unix(weeklyReset)},
+		},
+	})
+	wantPick(t, r, req, "a")
+
+	*now = streamedAt.Add(30 * time.Minute)
+	r.Observe(longStream)
+	wantPick(t, r, req, "a")
+
+	usage := r.Status().Providers[0].Accounts[0]
+	if usage.ID != "a" || usage.ResetsAt == nil || !usage.ResetsAt.Equal(weeklyReset) || len(usage.Windows) != 1 || usage.Windows[0].UsedPercent != 0 {
+		t.Fatalf("account after a late stream = %+v", usage)
+	}
+}
+
+func TestRequestTimeAfterNowCannotLowerUsage(t *testing.T) {
+	r, now := testRouter()
+
+	weeklyReset := now.Add(24 * time.Hour)
+	observeReset(r, "b", now.Add(6*24*time.Hour))
+	r.Observe(pluginapi.UsageRecord{
+		Provider:    "claude",
+		AuthID:      "a",
+		RequestedAt: *now,
+		Failed:      true,
+		ResponseHeaders: http.Header{
+			"Anthropic-Ratelimit-Unified-7d-Status": {"rejected"},
+			"Anthropic-Ratelimit-Unified-7d-Reset":  {unix(weeklyReset)},
+		},
+	})
+
+	*now = now.Add(time.Minute)
+	r.Observe(pluginapi.UsageRecord{
+		Provider:    "claude",
+		AuthID:      "a",
+		RequestedAt: now.Add(time.Hour),
+		ResponseHeaders: http.Header{
+			"Anthropic-Ratelimit-Unified-7d-Utilization": {"0.1"},
+			"Anthropic-Ratelimit-Unified-7d-Reset":       {unix(weeklyReset)},
+		},
+	})
+
+	wantPick(t, r, pickRequest("a", "b"), "b")
 }
 
 func TestMalformedUtilizationIsIgnored(t *testing.T) {

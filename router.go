@@ -16,16 +16,18 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
-const version = "1.2.0"
+const version = "1.2.1"
 
 const (
 	pluginID       = "reset-first"
+	limitRecheck   = 5 * time.Minute
 	probeRetry     = 15 * time.Minute
 	resetTolerance = 10 * time.Minute
 )
 
 const (
-	groupProbe = iota
+	groupRecheck = iota
+	groupProbe
 	groupKnown
 	groupPending
 	groupOther
@@ -55,11 +57,13 @@ type quota struct {
 }
 
 type window struct {
-	minutes int64
-	model   string
-	used    float64
-	reset   int64
-	limited bool
+	minutes    int64
+	model      string
+	used       float64
+	reset      int64
+	limited    bool
+	observedAt time.Time
+	since      time.Time
 }
 
 type observation struct {
@@ -74,6 +78,7 @@ type account struct {
 	seen         bool
 	reset        int64
 	probedAt     time.Time
+	checkedAt    time.Time
 	windows      []window
 }
 
@@ -144,18 +149,23 @@ func (r *router) Observe(record pluginapi.UsageRecord) {
 	state := r.accounts[record.AuthID]
 	state.provider = provider
 
+	// A request time after now means the clock moved back, so it cannot order responses.
 	requestedAt := record.RequestedAt
-	if requestedAt.IsZero() || requestedAt.After(now) {
-		requestedAt = now
+	if requestedAt.After(now) {
+		requestedAt = time.Time{}
 	}
 
 	observed := readQuota(record.ResponseHeaders, requestedAt, now)
 
 	wasLimited := state.limitedUntil(now) > 0
-	state.windows = mergeWindows(state.windows, observed.windows, now)
+	state.windows = mergeWindows(state.windows, observed.windows, requestedAt, now)
 
-	if until := state.limitedUntil(now); until > 0 && !wasLimited {
+	switch until := state.limitedUntil(now); {
+	case until > 0 && !wasLimited:
+		state.checkedAt = now
 		resetLogger.Printf("auth %q reached a quota limit until %s", record.AuthID, time.Unix(until, 0).UTC().Format(time.RFC3339))
+	case until == 0 && wasLimited:
+		resetLogger.Printf("auth %q is below its quota limits again", record.AuthID)
 	}
 
 	tolerance := int64(resetTolerance / time.Second)
@@ -208,6 +218,12 @@ func (r *router) Pick(req pluginapi.SchedulerPickRequest) pluginapi.SchedulerPic
 		if r.less(candidate, chosen, now) {
 			chosen = candidate
 		}
+	}
+
+	// This request shows whether the limit still holds, so the next check waits.
+	if state := r.accounts[chosen.ID]; state.limitedUntil(now) > 0 {
+		state.checkedAt = now
+		r.accounts[chosen.ID] = state
 	}
 
 	return pluginapi.SchedulerPickResponse{Handled: true, AuthID: chosen.ID}
@@ -274,7 +290,7 @@ func (r *router) accountReport(candidate pluginapi.SchedulerAuthCandidate, avail
 	}
 
 	switch group, until := r.rank(candidate, now); group {
-	case groupLimited:
+	case groupLimited, groupRecheck:
 		limitedUntil := time.Unix(until, 0).UTC()
 		report.State, report.LimitedUntil = "limited", &limitedUntil
 	case groupKnown:
@@ -313,7 +329,7 @@ func (a account) limitedUntil(now time.Time) int64 {
 	return until
 }
 
-func mergeWindows(stored []window, observed []observation, now time.Time) []window {
+func mergeWindows(stored []window, observed []observation, requestedAt, now time.Time) []window {
 	merged := make([]window, 0, len(stored)+len(observed))
 
 	for _, w := range stored {
@@ -323,13 +339,15 @@ func mergeWindows(stored []window, observed []observation, now time.Time) []wind
 	}
 
 	for _, next := range observed {
+		next.observedAt = now
+
 		i := slices.IndexFunc(merged, func(w window) bool { return w.minutes == next.minutes && w.model == next.model })
 		if i < 0 {
 			merged = append(merged, next.window)
 			continue
 		}
 
-		merged[i] = merged[i].update(next)
+		merged[i] = merged[i].update(next, requestedAt)
 	}
 
 	slices.SortFunc(merged, func(a, b window) int {
@@ -339,22 +357,37 @@ func mergeWindows(stored []window, observed []observation, now time.Time) []wind
 	return merged
 }
 
-func (w window) update(next observation) window {
-	tolerance := int64(resetTolerance / time.Second)
-
-	switch {
-	case next.reset == 0:
-		next.reset = w.reset
-	case next.reset < w.reset-tolerance:
+// Responses can arrive out of order. Only a response to a request sent after the stored usage
+// arrived can lower the usage, as after a manual reset, or move the reset much earlier. A request
+// sent before such a drop can still report the old usage, so its response is ignored.
+func (w window) update(next observation, requestedAt time.Time) window {
+	if requestedAt.Before(w.since) {
 		return w
-	case next.earliest > w.reset+tolerance:
-		return next.window
-	default:
-		next.reset = min(next.reset, w.reset)
 	}
 
-	next.used = max(next.used, w.used)
-	next.limited = next.limited || w.limited
+	tolerance := int64(resetTolerance / time.Second)
+	current := requestedAt.After(w.observedAt)
+
+	switch {
+	case next.earliest > w.reset+tolerance:
+		return next.window
+	case next.reset == 0:
+		next.reset = w.reset
+	case next.reset >= w.reset-tolerance:
+		next.reset = min(next.reset, w.reset)
+	case !current:
+		return w
+	}
+
+	next.since = w.since
+
+	switch {
+	case !current:
+		next.used = max(next.used, w.used)
+		next.limited = next.limited || w.limited
+	case next.used < w.used || w.limited && !next.limited:
+		next.since = requestedAt
+	}
 
 	return next.window
 }
@@ -432,8 +465,10 @@ func (r *router) rank(candidate pluginapi.SchedulerAuthCandidate, now time.Time)
 	switch {
 	case !isSubscription(candidate):
 		return groupOther, 0
-	case limitedUntil > 0:
+	case limitedUntil > 0 && now.Before(state.checkedAt.Add(limitRecheck)):
 		return groupLimited, limitedUntil
+	case limitedUntil > 0:
+		return groupRecheck, limitedUntil
 	case state.reset > now.Unix():
 		return groupKnown, state.reset
 	case state.probedAt.IsZero() || !now.Before(state.probedAt.Add(probeRetry)):
@@ -473,6 +508,10 @@ func claudeQuota(headers map[string][]string, _, _ time.Time) quota {
 func codexQuota(headers map[string][]string, requestedAt, now time.Time) quota {
 	var observed quota
 
+	if requestedAt.IsZero() {
+		requestedAt = now
+	}
+
 	longest := int64(0)
 
 	for _, prefix := range []string{"X-Codex-Primary-", "X-Codex-Secondary-"} {
@@ -481,9 +520,10 @@ func codexQuota(headers map[string][]string, requestedAt, now time.Time) quota {
 			continue
 		}
 
+		// Counting from when the request was sent keeps a long stream from pushing the order's reset later.
 		earliest, reset := codexWindowReset(headers, prefix, requestedAt, now)
 		if minutes > longest {
-			longest, observed.reset = minutes, reset
+			longest, observed.reset = minutes, earliest
 		}
 
 		if used, ok := headerFloat(headers, prefix+"Used-Percent"); ok {
