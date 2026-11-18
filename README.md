@@ -33,7 +33,7 @@ CGO_ENABLED=1 go build -buildmode=c-shared -o plugins/reset-first.so .
 
 ## Status page
 
-Open **Reset First** from the plugin menu in the management dashboard to see, for each provider, which account requests go to, the order after it, and which accounts are not used right now and why. When Fable requests go to a different account than requests for other models, the page shows both. Each account shows the limits its responses through CPA have reported, such as the 5-hour, weekly and Claude's weekly Fable 5 limits, with how much of each is left and when it resets. Usage from other apps shows up after the account's next request through CPA. The page reads `GET /v0/management/reset-first/status`, which requires the management key. It reuses the dashboard login when "Remember password" is on, and otherwise asks for the key.
+Open **Reset First** from the plugin menu in the management dashboard to see, for each provider, which account requests go to, the order after it, and which accounts are not used right now and why. When Fable requests go to a different account than requests for other models, the page shows both. Each account shows the limits its responses through CPA have reported, such as the 5-hour, weekly and Claude's weekly Fable 5 limits, with how much of each is left and when it resets, and the model and time of the last request it served. Usage from other apps shows up after the account's next request through CPA. The page reads `GET /v0/management/reset-first/status`, which requires the management key. It reuses the dashboard login when "Remember password" is on, and otherwise asks for the key.
 
 ## Notes
 

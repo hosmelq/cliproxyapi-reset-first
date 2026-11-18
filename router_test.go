@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1570,5 +1571,40 @@ func TestMalformedPickIsLeftToCPA(t *testing.T) {
 		if err := json.Unmarshal(envelope.Result, &got); err != nil || got.Handled {
 			t.Fatalf("malformed pick %q: response = %+v, error = %v", raw, got, err)
 		}
+	}
+}
+
+func TestStatusShowsTheLastModelEachAccountServed(t *testing.T) {
+	r, now := testRouter()
+
+	observeReset(r, "a", now.Add(24*time.Hour))
+	observeReset(r, "b", now.Add(2*24*time.Hour))
+	observeReset(r, "c", now.Add(3*24*time.Hour))
+	served := *now
+	r.Observe(pluginapi.UsageRecord{Provider: "claude", AuthID: "b", Model: "claude-fable-5-2"})
+
+	*now = now.Add(2 * time.Minute)
+	r.Observe(pluginapi.UsageRecord{Provider: "claude", AuthID: "a", Alias: "opus", Model: "claude-opus-5-5"})
+	r.Observe(pluginapi.UsageRecord{Provider: "claude", AuthID: "b", Model: "claude-opus-5-5", Failed: true})
+	wantPick(t, r, modelRequest("claude-opus-5-5", "a", "b", "c"), "a")
+
+	type last struct {
+		model string
+		at    time.Time
+	}
+
+	got := map[string]last{}
+	for _, account := range r.Status().Providers[0].Accounts {
+		entry := last{model: account.LastModel}
+		if account.LastUsedAt != nil {
+			entry.at = *account.LastUsedAt
+		}
+		got[account.ID] = entry
+	}
+
+	// A failed request isn't one the account served, and an account with no request yet shows no model.
+	want := map[string]last{"a": {"claude-opus-5-5", *now}, "b": {"claude-fable-5-2", served}, "c": {}}
+	if !maps.Equal(got, want) {
+		t.Fatalf("last requests = %v, want %v", got, want)
 	}
 }

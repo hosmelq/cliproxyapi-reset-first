@@ -16,7 +16,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
-const version = "1.3.1"
+const version = "1.3.2"
 
 const (
 	pluginID       = "reset-first"
@@ -100,6 +100,8 @@ type account struct {
 	probedAt     time.Time
 	checkedAt    map[string]time.Time
 	windows      []window
+	lastModel    string
+	lastUsedAt   time.Time
 }
 
 // offer names the candidates CPA last offered for a provider's requests in one scope: "" for models without a limit
@@ -145,6 +147,8 @@ type accountReport struct {
 	RetryAt      *time.Time     `json:"retry_at,omitempty"`
 	LimitedUntil *time.Time     `json:"limited_until,omitempty"`
 	Windows      []windowReport `json:"windows,omitempty"`
+	LastModel    string         `json:"last_model,omitempty"`
+	LastUsedAt   *time.Time     `json:"last_used_at,omitempty"`
 }
 
 type windowReport struct {
@@ -189,6 +193,10 @@ func (r *router) Observe(record pluginapi.UsageRecord) {
 	now := r.now()
 	state := r.accounts[record.AuthID]
 	state.provider = provider
+
+	if !record.Failed && record.Model != "" {
+		state.lastModel, state.lastUsedAt = record.Model, now
+	}
 
 	// A request time after now means the clock moved back, so it cannot order responses.
 	requestedAt := record.RequestedAt
@@ -450,6 +458,11 @@ func (r *router) accountReport(candidate pluginapi.SchedulerAuthCandidate, avail
 	if state.reset > now.Unix() {
 		resetsAt := time.Unix(state.reset, 0).UTC()
 		report.ResetsAt = &resetsAt
+	}
+
+	if state.lastModel != "" {
+		lastUsedAt := state.lastUsedAt.UTC()
+		report.LastModel, report.LastUsedAt = state.lastModel, &lastUsedAt
 	}
 
 	switch group, until := r.rank(candidate, now, "", true); group {

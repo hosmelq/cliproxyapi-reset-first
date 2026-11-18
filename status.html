@@ -464,6 +464,26 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+/* The model of the last request the account served, so it's clear which model is spending its quota. */
+.last {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The model and its time move to the next line together, so the time is never left alone on a line. */
+.last-detail {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.last-model {
+  font-family: var(--mono);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 /* Only the limits an account reported, so the count per row runs from none to three. */
 .meters {
   display: grid;
@@ -1068,6 +1088,21 @@ h1 {
     return relativeFormat.format(days, "day");
   }
 
+  function ago(date) {
+    const minutes = Math.round((now().getTime() - date.getTime()) / 60000);
+    const hours = Math.round(minutes / 60);
+
+    if (minutes < 1) {
+      return "just now";
+    }
+
+    if (minutes < 60) {
+      return minutes + "\u00a0min ago";
+    }
+
+    return hours < 24 ? hours + "\u00a0h ago" : Math.round(hours / 24) + "\u00a0d ago";
+  }
+
   // Non-breaking, so "Wed 6:00 AM" never splits across lines.
   function clock(date) {
     return (daysAway(date) === 0 ? timeFormat : dayFormat).format(date).replace(/\s/g, "\u00a0");
@@ -1382,6 +1417,15 @@ h1 {
 
     if (text) {
       who.append(element("p", "reason", text));
+    }
+
+    if (account.last_model && account.last_used_at) {
+      const last = element("p", "last");
+      const detail = element("span", "last-detail");
+
+      detail.append(element("span", "last-model", account.last_model), "\u00a0· " + ago(new Date(account.last_used_at)));
+      last.append("Last request: ", detail);
+      who.append(last);
     }
 
     node.append(element("span", "number", position ? String(position) : ""), who);
