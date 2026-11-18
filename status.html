@@ -106,6 +106,8 @@ main {
   margin: 0 auto;
   /* CPA draws its floating header over plugin pages, so leave the room its own pages leave. */
   padding: 70px clamp(20px, 3vw, 48px) 40px;
+  /* The wider layouts below switch on this width, which is the width the provider cards get. */
+  container: page / inline-size;
 }
 
 h1,
@@ -333,7 +335,6 @@ h1 {
 
 .section {
   gap: 18px;
-  container-type: inline-size;
 }
 
 .head {
@@ -594,32 +595,24 @@ h1 {
 }
 
 /*
-  When Fable requests go to another account than the rest, each destination gets a whole card. The cards sit side
-  by side only where both fit their whole address on one line (--dest-min, measured after each render) and stack
-  below that. Side by side they share rows, so names and meters start level whatever wraps above them.
+  When Fable requests go to another account than the rest, each destination gets a whole card. The cards stack at
+  every width, so each is only as tall as the limits its own account reported.
 */
 .pair {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--dest-min, 300px)), 1fr));
-  gap: 8px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 
 .dest {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
-  grid-template-rows: subgrid;
-  grid-row: span 3;
   align-items: baseline;
   gap: 10px;
   min-width: 0;
   padding: 14px;
   border-radius: 12px;
   background: var(--well);
-}
-
-/* An account that reported no limits fills the meters' row too, so its card still ends level with the other. */
-.dest.bare .who {
-  grid-row: span 2;
 }
 
 .dest-label {
@@ -636,17 +629,6 @@ h1 {
 
 .dest .name {
   font-size: 15px;
-}
-
-.section[data-tracks] .dest .meters {
-  grid-column: 2;
-  padding-left: 0;
-}
-
-.probe {
-  position: absolute;
-  visibility: hidden;
-  white-space: nowrap;
 }
 
 /* Stands where the Fable card would be when no account can take Fable requests. */
@@ -748,32 +730,104 @@ h1 {
 }
 
 /*
-  Wider cards lay an account's meters side by side under its name. The card sizes its meter columns for
-  the account with the most limits, so bars line up down the card and rows with fewer limits end sooner.
+  From 650 px, where a whole limit fits on one line with a bar worth reading, each limit is one line: label, bar,
+  percent left and reset. Every card on the page takes its columns from the same grid, so the labels and bars line
+  up from row to row, the bars are all one length, and an account with fewer limits simply has fewer lines.
 */
-@container (min-width: 540px) {
-  .entry {
-    grid-template-columns: 24px minmax(0, 1fr);
-    gap: 12px;
+@container page (min-width: 650px) {
+  #pools {
+    display: grid;
+    grid-template-columns: max-content max-content minmax(80px, 1fr) max-content max-content;
+    column-gap: 14px;
+  }
+
+  .section,
+  .group,
+  .pair,
+  .list,
+  .dest,
+  .entry,
+  .meters,
+  .meter {
+    display: grid;
+    grid-template-columns: subgrid;
+    column-gap: 14px;
+  }
+
+  #pools > *,
+  .section > *,
+  .group > *,
+  .pair > *,
+  .list > *,
+  .dest-label,
+  .meter {
+    grid-column: 1 / -1;
+  }
+
+  .entry,
+  .dest {
+    row-gap: 12px;
     padding: 16px 18px;
   }
 
+  /* The section's own padding is the space under its last row. */
+  .section > .group:last-child > .list > .entry:last-child {
+    padding-bottom: 0;
+  }
+
+  .number {
+    min-width: 22px;
+  }
+
+  .who,
   .meters {
-    grid-template-columns: repeat(auto-fill, minmax(max(200px, (100% - (var(--tracks) - 1) * 24px) / var(--tracks)), 1fr));
+    grid-column: 2 / -1;
+  }
+
+  .meters {
+    row-gap: 7px;
+  }
+
+  .meter {
+    align-items: baseline;
+  }
+
+  .meter-head {
+    display: contents;
+  }
+
+  .meter-label,
+  .bar,
+  .meter-value,
+  .meter-reset {
+    grid-row: 1;
+    white-space: nowrap;
+  }
+
+  .meter-label {
+    grid-column: 1;
+  }
+
+  .bar {
+    grid-column: 2;
+    align-self: center;
+  }
+
+  /* Room for "100% left" in every row, so the bars keep their length when a value gains or loses a digit. */
+  .meter-value {
+    grid-column: 3;
+    min-width: 9ch;
+    margin-left: 0;
+    text-align: right;
+  }
+
+  .meter-reset {
+    grid-column: 4;
+    margin-left: 6px;
   }
 
   .vacant {
     padding: 16px 18px;
-  }
-
-  .dest {
-    grid-template-columns: 24px minmax(0, 1fr);
-    gap: 12px;
-    padding: 16px 18px;
-  }
-
-  .section[data-tracks] .dest .meters {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 
   .note {
@@ -781,38 +835,38 @@ h1 {
   }
 }
 
-/* Once the meters fit beside the name, they move up next to it, so a row is only as tall as its taller side. */
-@container (min-width: 780px) {
-  .section[data-tracks="1"] .entry {
-    grid-template-columns: 24px minmax(0, 1fr) minmax(216px, .75fr);
+/*
+  From 1060 px a name and its limit lines fit side by side, so the limits move up beside the name and a row is only
+  as tall as its taller side. The name column is as wide as the longest name or sentence on the page, up to about a
+  third of the row, and the bars take the rest.
+*/
+@container page (min-width: 1060px) {
+  #pools {
+    grid-template-columns: max-content fit-content(clamp(300px, 32%, 440px)) max-content minmax(80px, 1fr) max-content max-content;
   }
 
-  .section[data-tracks="2"] .entry {
-    grid-template-columns: 24px minmax(0, 1fr) minmax(440px, 1.6fr);
+  .who {
+    grid-column: 2;
+    margin-right: 12px;
   }
 
-  .section:not([data-tracks="3"]) .meters {
-    grid-column: 3;
-    padding-left: 16px;
+  /* A sentence wraps at about fifty characters, so one long explanation doesn't push every bar on the page away. */
+  .reason {
+    max-width: 320px;
   }
 
-  .section:not([data-tracks="3"]) .bare .who {
+  /* An account that reported no limits has the whole row for its name and sentence. */
+  .bare .who {
     grid-column: 2 / -1;
-  }
-}
-
-@container (min-width: 990px) {
-  .section[data-tracks="3"] .entry {
-    grid-template-columns: 24px minmax(0, 1fr) minmax(664px, 2.4fr);
+    margin-right: 0;
   }
 
-  .section[data-tracks="3"] .meters {
-    grid-column: 3;
-    padding-left: 16px;
+  .bare .reason {
+    max-width: none;
   }
 
-  .section[data-tracks="3"] .bare .who {
-    grid-column: 2 / -1;
+  .meters {
+    grid-column: 3 / -1;
   }
 }
 
@@ -1210,7 +1264,6 @@ h1 {
     const row = entry(account, position, report, name, { card: true, reason });
 
     heading.id = "destination-" + ++destinations;
-    card.classList.toggle("bare", row.classList.contains("bare"));
     card.setAttribute("aria-labelledby", heading.id);
     card.append(heading, row);
 
@@ -1246,24 +1299,6 @@ h1 {
 
   function listed(numbers) {
     return numbers.length > 1 ? numbers.slice(0, -1).join(", ") + " and " + numbers.at(-1) : String(numbers[0]);
-  }
-
-  // Side by side, each card must hold its whole address on one line, so the cards stack until both fit.
-  function fitPairs() {
-    for (const pair of document.querySelectorAll(".pair")) {
-      let widest = 0;
-
-      for (const label of pair.querySelectorAll(".name")) {
-        const probe = element("span", "probe", label.textContent);
-
-        label.append(probe);
-        widest = Math.max(widest, probe.getBoundingClientRect().width);
-        probe.remove();
-      }
-
-      // 72 px of card padding and number column around the name; 300 px keeps a meter's label and value on one line.
-      pair.style.setProperty("--dest-min", Math.max(300, Math.ceil(widest) + 72) + "px");
-    }
   }
 
   function limitName(account) {
@@ -1377,14 +1412,10 @@ h1 {
     const fable = fableId === undefined ? first : report.accounts.find((account) => account.id === fableId);
     const rest = queue.slice(1);
     const idle = report.accounts.filter((account) => account !== first && account !== fable && (!account.available || account.state === "limited"));
-    const tracks = Math.max(1, ...report.accounts.map((account) => account.windows?.length || 0));
     const name = namer(report);
     const split = Boolean(fable) && fable !== first;
     const node = element("section", "section");
     const head = element("div", "head inline-list");
-
-    node.dataset.tracks = String(Math.min(tracks, 3));
-    node.style.setProperty("--tracks", String(Math.min(tracks, 3)));
 
     head.append(element("h2", "provider " + report.provider, providerNames[report.provider] || report.provider), element("span", "", plural(report.accounts.length, "account")));
 
@@ -1478,7 +1509,6 @@ h1 {
     }
 
     byId("pools").replaceChildren(...sections);
-    fitPairs();
     byId("usage-note").hidden = !providers.some((provider) => provider.accounts.length);
     byId("refresh").classList.remove("concealed");
     byId("details").hidden = false;

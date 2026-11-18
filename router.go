@@ -16,7 +16,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
-const version = "1.3.0"
+const version = "1.3.1"
 
 const (
 	pluginID       = "reset-first"
