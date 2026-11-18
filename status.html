@@ -593,6 +593,73 @@ h1 {
   font-size: 13px;
 }
 
+/*
+  When Fable requests go to another account than the rest, each destination gets a whole card. The cards sit side
+  by side only where both fit their whole address on one line (--dest-min, measured after each render) and stack
+  below that. Side by side they share rows, so names and meters start level whatever wraps above them.
+*/
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--dest-min, 300px)), 1fr));
+  gap: 8px 12px;
+}
+
+.dest {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--well);
+}
+
+/* An account that reported no limits fills the meters' row too, so its card still ends level with the other. */
+.dest.bare .who {
+  grid-row: span 2;
+}
+
+.dest-label {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.dest .entry {
+  display: contents;
+}
+
+.dest .name {
+  font-size: 15px;
+}
+
+.section[data-tracks] .dest .meters {
+  grid-column: 2;
+  padding-left: 0;
+}
+
+.probe {
+  position: absolute;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+/* Stands where the Fable card would be when no account can take Fable requests. */
+.note {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--bg-error-light);
+  color: var(--failure-badge-text);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-wrap: pretty;
+}
+
 .alert {
   padding: 9px 12px;
   border: 1px solid var(--warning-border);
@@ -697,6 +764,20 @@ h1 {
 
   .vacant {
     padding: 16px 18px;
+  }
+
+  .dest {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px 18px;
+  }
+
+  .section[data-tracks] .dest .meters {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .note {
+    padding: 10px 18px;
   }
 }
 
@@ -1111,6 +1192,80 @@ h1 {
     return node;
   }
 
+  // Like the router, only a used-up Fable limit with a known reset holds the account.
+  function fableUsedUp(usage) {
+    return usage.model === "fable" && usage.limited && Boolean(usage.resets_at);
+  }
+
+  // Fable's weekly limit stops only Fable requests, so an account without Fable left keeps its place for every other model.
+  function hasFable(account) {
+    return !(account.windows || []).some(fableUsedUp);
+  }
+
+  let destinations = 0;
+
+  function destination(label, account, position, report, name, reason) {
+    const card = element("article", "dest");
+    const heading = element("p", "dest-label", label);
+    const row = entry(account, position, report, name, { card: true, reason });
+
+    heading.id = "destination-" + ++destinations;
+    card.classList.toggle("bare", row.classList.contains("bare"));
+    card.setAttribute("aria-labelledby", heading.id);
+    card.append(heading, row);
+
+    return card;
+  }
+
+  // Each item states its number, since the list can skip the number the Fable card shows.
+  function orderList(accounts, queue, report, name) {
+    const list = element("ol", "list");
+
+    for (const account of accounts) {
+      const number = queue.indexOf(account) + 1;
+      const item = entry(account, number, report, name);
+
+      item.value = number;
+      list.append(item);
+    }
+
+    return list;
+  }
+
+  // When an account's own limits let it take Fable requests again: once its shared limits and its Fable limit are over.
+  function freeForFable(account) {
+    const resets = (account.windows || []).filter(fableUsedUp).map((usage) => Date.parse(usage.resets_at));
+
+    return Math.max(account.state === "limited" ? Date.parse(account.limited_until) : 0, ...resets);
+  }
+
+  // The positions in the order of the accounts that still have Fable by their own limits.
+  function withFable(accounts, queue) {
+    return accounts.filter(hasFable).map((account) => queue.indexOf(account) + 1);
+  }
+
+  function listed(numbers) {
+    return numbers.length > 1 ? numbers.slice(0, -1).join(", ") + " and " + numbers.at(-1) : String(numbers[0]);
+  }
+
+  // Side by side, each card must hold its whole address on one line, so the cards stack until both fit.
+  function fitPairs() {
+    for (const pair of document.querySelectorAll(".pair")) {
+      let widest = 0;
+
+      for (const label of pair.querySelectorAll(".name")) {
+        const probe = element("span", "probe", label.textContent);
+
+        label.append(probe);
+        widest = Math.max(widest, probe.getBoundingClientRect().width);
+        probe.remove();
+      }
+
+      // 72 px of card padding and number column around the name; 300 px keeps a meter's label and value on one line.
+      pair.style.setProperty("--dest-min", Math.max(300, Math.ceil(widest) + 72) + "px");
+    }
+  }
+
   function limitName(account) {
     const limits = (account.windows || []).filter((usage) => usage.limited && !usage.model);
     const match = limits.find((usage) => sameTime(usage.resets_at, account.limited_until)) || limits[0];
@@ -1163,10 +1318,13 @@ h1 {
     return { text: first ? "Its weekly quota resets soonest: " + resets + "." : "Weekly quota resets " + resets + "." };
   }
 
-  function entry(account, position, report, name) {
+  // A destination card holds its row in a plain element and never looks idle, since its account takes requests.
+  function entry(account, position, report, name, options = {}) {
     const first = position === 1;
+    const hero = first && !options.card;
     const reason = explain(account, report, first);
-    const node = element(first ? "article" : "li", first ? "entry hero" : position ? "entry" : "entry idle");
+    const text = options.reason ?? reason.text;
+    const node = element(options.card ? "div" : hero ? "article" : "li", hero ? "entry hero" : position || options.card ? "entry" : "entry idle");
     const who = element("div", "who");
     const head = element("div", "who-head");
     const label = element("span", "name");
@@ -1180,10 +1338,15 @@ h1 {
       head.append(element("span", reason.alert ? "pill failure" : "pill", reason.tag));
     }
 
+    // Only where the account is in the order, since a stopped or skipped account takes no requests at all.
+    if (position && account.state !== "limited" && !hasFable(account)) {
+      head.append(element("span", "pill", "No Fable left"));
+    }
+
     who.append(head);
 
-    if (reason.text) {
-      who.append(element("p", "reason", reason.text));
+    if (text) {
+      who.append(element("p", "reason", text));
     }
 
     node.append(element("span", "number", position ? String(position) : ""), who);
@@ -1209,10 +1372,14 @@ h1 {
     const offered = report.accounts.filter((account) => account.available);
     const queue = offered.filter((account) => account.state !== "limited");
     const first = queue[0] || offered[0];
+    // The plugin names where Fable requests go once a Fable limit or request has shown up, and "" when no account can take them.
+    const fableId = report.models?.fable;
+    const fable = fableId === undefined ? first : report.accounts.find((account) => account.id === fableId);
     const rest = queue.slice(1);
-    const idle = report.accounts.filter((account) => account !== first && (!account.available || account.state === "limited"));
+    const idle = report.accounts.filter((account) => account !== first && account !== fable && (!account.available || account.state === "limited"));
     const tracks = Math.max(1, ...report.accounts.map((account) => account.windows?.length || 0));
     const name = namer(report);
+    const split = Boolean(fable) && fable !== first;
     const node = element("section", "section");
     const head = element("div", "head inline-list");
 
@@ -1221,19 +1388,65 @@ h1 {
 
     head.append(element("h2", "provider " + report.provider, providerNames[report.provider] || report.provider), element("span", "", plural(report.accounts.length, "account")));
 
-    if (report.serving && report.serving !== first?.id) {
+    // A Fable request answered by the account Fable requests go to is expected, so only another account is worth naming.
+    if (report.serving && report.serving !== first?.id && report.serving !== fable?.id) {
       const last = element("span", "item", "Last request went to ");
       last.append(element("strong", "", name(report.serving)));
       head.append(last);
     }
 
-    node.append(head, group("Requests go to", first ? entry(first, 1, report, name) : element("p", "vacant", "No account is available right now.")));
+    if (!split) {
+      const going = group("Requests go to", first ? entry(first, 1, report, name) : element("p", "vacant", "No account is available right now."));
 
-    if (rest.length) {
-      const list = element("ol", "list");
-      list.start = 2;
-      list.append(...rest.map((account, index) => entry(account, index + 2, report, name)));
-      node.append(group("Then, in this order", list));
+      if (first && !fable) {
+        // The plugin says when the first account CPA offers for Fable requests frees up, when it can tell.
+        const back = report.models_until?.fable ? new Date(report.models_until.fable) : null;
+
+        // When every account is at a shared limit, the note adds something only if Fable comes back at another time.
+        const shared = queue.length ? 0 : Math.min(...offered.map((account) => Date.parse(account.limited_until)));
+
+        if (queue.length || (back && back.getTime() !== shared)) {
+          // An account in the order that still has Fable was left out by CPA, so the note names it, as the Fable card does.
+          const left = withFable(queue, queue);
+          const why = left.length ? "CPA left " + listed(left) + " out of the last Fable request and offered only accounts at a limit." : "";
+          // An account that frees up for Fable before that time may take them sooner: one CPA left out that still has
+          // Fable, or one held until earlier that CPA didn't offer for them. Then the time is only the latest it can be.
+          const latest = back && report.accounts.some((account) => freeForFable(account) < back.getTime());
+          const text = back
+            ? "Fable requests fail until " + on(back) + (latest ? " at the latest" : "") + "." + (why ? " " + why : "")
+            : "Fable requests fail: " + (why || "no account CPA offers for them has Fable left.");
+
+          going.append(element("p", "note", text));
+        }
+      }
+
+      node.append(head, going);
+
+      if (rest.length) {
+        node.append(group("Then, in this order", orderList(rest, queue, report, name)));
+      }
+    } else {
+      const position = queue.indexOf(fable) + 1;
+      const later = queue.filter((account) => account !== first && account !== fable);
+      const pair = element("div", "pair");
+
+      // Further down the order, the Fable card says which accounts it passed, and the list no longer reads as what comes next.
+      // An account ahead that still has Fable by its own limits ranks ahead for Fable too, so CPA left it out of Fable
+      // requests. An account outside the order for other models has no number, so its card says why.
+      const ahead = withFable(queue.slice(0, Math.max(0, position - 1)), queue);
+      const reason = !position
+        ? "Takes Fable requests. CPA left it out of the last request for other models."
+        : ahead.length
+          ? "Takes Fable requests. CPA left " + listed(ahead) + " out of the last Fable request."
+          : "First in the order with Fable left" + (position > 2 ? ", after " + (position === 3 ? "1 and 2" : "1–" + (position - 1)) : "") + ".";
+
+      // The plugin named this account for Fable requests, so CPA offers it for them even when it left it out of others.
+      pair.append(destination("Other models", first, 1, report, name), destination("Fable", { ...fable, available: true }, position, report, name, reason));
+      node.append(head, group("Requests go to", pair));
+
+      if (later.length) {
+        node.append(group(position > 2 ? "Rest of the order" : "Then, in this order", orderList(later, queue, report, name)));
+      }
     }
 
     if (idle.length) {
@@ -1265,6 +1478,7 @@ h1 {
     }
 
     byId("pools").replaceChildren(...sections);
+    fitPairs();
     byId("usage-note").hidden = !providers.some((provider) => provider.accounts.length);
     byId("refresh").classList.remove("concealed");
     byId("details").hidden = false;
